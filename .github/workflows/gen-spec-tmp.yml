@@ -1,0 +1,40 @@
+name: gen-spec-tmp
+on:
+  push:
+    branches: ["gerami/tmp-genspec3"]
+jobs:
+  gen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: "pnpm"
+      - name: Install
+        run: pnpm install
+      - name: Generate OpenAPI spec
+        run: pnpm generate-openapi
+      - name: Generate docs
+        run: |
+          cd docs
+          pnpm install
+          pnpm gen
+      - name: Collect generated changes
+        run: |
+          git add -A
+          git diff --cached --binary -- packages/back-end/generated docs > /tmp/generated.patch
+          git diff --cached --stat -- packages/back-end/generated docs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: generated-patch
+          path: /tmp/generated.patch
+      - name: Type-check
+        run: |
+          pnpm --filter shared type-check
+          pnpm --filter back-end type-check
+      - name: Lint changed files
+        run: pnpm eslint packages/back-end/src/services/features.ts packages/back-end/test/services/revisionToApiInterface.test.ts packages/back-end/test/services/getApiFeatureObj.test.ts packages/shared/src/validators/features.ts packages/shared/src/validators/features-v2.ts
+      - name: Tests
+        run: pnpm --filter back-end test test/services/revisionToApiInterface.test.ts test/services/getApiFeatureObj.test.ts test/services/featureRevisionEvents.test.ts test/events/feature.test.ts test/api/features.test.ts
